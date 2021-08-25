@@ -1,0 +1,21 @@
+.PHONY : clean test
+
+#CPPFLAGS= -std=c++17 -fPIC -Wall -Wextra -O3 -g
+CPPFLAGS= -std=c++17 -fPIC -Wall -Wextra -ggdb
+LDFLAGS= -std=c++17 -dynamiclib
+
+SOURCES = external.cpp level.cpp m.cpp main.cpp urlaribitrator.test.cpp
+OBJECTS=$(SOURCES:.cpp=.o)
+
+TARGET=liburlarbitrator.dylib
+
+all: $(TARGET)
+
+clean:
+	rm -f $(OBJECTS) $(TARGET)
+
+test:
+	g++ $(CPPFLAGS) external.cpp level.cpp m.cpp main.cpp urlaribitrator.test.cpp -ltbb -o test
+
+$(TARGET) : $(OBJECTS)
+	g++ $(CPPFLAGS) $(OBJECTS) -o $@ $(LDFLAGS) -ltbb
