@@ -13,7 +13,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/HPISTechnologies/common-lib/codec"
+	"github.com/arcology/common-lib/codec"
 )
 
 func Start() unsafe.Pointer {

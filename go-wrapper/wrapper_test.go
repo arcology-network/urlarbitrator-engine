@@ -3,7 +3,7 @@ package wrapper_test
 import (
 	"testing"
 
-	"github.com/HPISTechnologies/urlarbitrator-engine/go-wrapper"
+	"github.com/arcology/urlarbitrator-engine/go-wrapper"
 )
 
 func TestWrapperBasic(t *testing.T) {
