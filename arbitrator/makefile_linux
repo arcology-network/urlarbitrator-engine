@@ -4,7 +4,7 @@
 CPPFLAGS= -std=c++17 -fPIC -Wall -Wextra -ggdb -D_GLIBCXX_USE_CXX11_ABI=0
 LDFLAGS= -std=c++17 -shared -D_GLIBCXX_USE_CXX11_ABI=0
 
-SOURCES = external.cpp level.cpp m.cpp main.cpp urlaribitrator.test.cpp
+SOURCES = access.info.cpp external.cpp urlarbitrator.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
 
 TARGET=liburlarbitrator.so
@@ -15,7 +15,7 @@ clean:
 	rm -f $(OBJECTS) $(TARGET)
 
 test:
-	g++ $(CPPFLAGS) external.cpp level.cpp m.cpp main.cpp urlaribitrator.test.cpp -ltbb -o test
+	g++ $(CPPFLAGS) access.info.cpp external.cpp main.cpp urlaribitrator.test.cpp urlarbitrator.cpp -ltbb -o test
 
 $(TARGET) : $(OBJECTS)
 	g++ $(CPPFLAGS) $(OBJECTS) -o $@ $(LDFLAGS) -ltbb

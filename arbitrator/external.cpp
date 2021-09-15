@@ -1,89 +1,69 @@
 #include "stdafx.h"
-
-void* Start() {
+void* UrlarbitratorStart() {
 	return new Urlarbitrator();
 }
 
-void Insert(void* UrlarbitratorPtr, char* txs, char* branchIDs, char* path, char* reads, char* writes, char* addOrDelete, char* composite, char* pathLen, uint32_t count) {
+void UrlarbitratorInsert(void* urlarbitratorPtr, char* txs, char* branchIDs, char* path, char* reads, char* writes, char* composite, char* pathLen, uint32_t count) {
+	Urlarbitrator* arbi = (Urlarbitrator*)(urlarbitratorPtr);
+
 	std::vector<uint32_t> positions(count + 1, 0);
 	for (std::size_t i = 0; i < count; i++) {
 		positions[i + 1] = positions[i] + ((uint32_t*)(pathLen))[i];
 	}
-		
-	Urlarbitrator* arbi = ((Urlarbitrator*)(UrlarbitratorPtr));
-	arbi->memory.push_back(new char[sizeof(Access) * count]);
 
-	char* mem = arbi->memory.back();
-	std::vector<Access*> records(count);
 	tbb::parallel_for(std::size_t(0), std::size_t(count), [&](std::size_t i) {
-		records[i] = new(mem + sizeof(Access) * i)
-			Access(((uint32_t*)(txs))[i], UINT32_MAX, path + positions[i], ((uint32_t*)(pathLen))[i], ((uint32_t*)(reads))[i], ((uint32_t*)(writes))[i], ((bool*)(addOrDelete))[i], ((bool*)composite)[i]);
+	//for (std::size_t i = 0; i < count; i++) {
+		std::string key(path + positions[i], ((uint32_t*)(pathLen))[i]);
+		Access* record = new Access(((uint32_t*)(txs))[i], ((uint32_t*)(txs))[i], nullptr, ((uint32_t*)(reads))[i], ((uint32_t*)(writes))[i], ((bool*)composite)[i]);
+		arbi->Insert(key, record);
 	});
-	((Urlarbitrator*)(UrlarbitratorPtr))->Insert(records);
 }
 
-void Detect(void* UrlarbitratorPtr, char* txs, char* group, char* conflictFlags, char* count, char*  msgBuffer) {
+void UrlarbitratorDetect(void* UrlarbitratorPtr, char* whitelist, uint32_t listCount, char* outTxBuf, char* outCount, char*  msgBuffer) {
+	tbb::concurrent_unordered_set<uint32_t> dict;
+	tbb::parallel_for(std::size_t(0), std::size_t(listCount), [&](std::size_t i) {
+		dict.insert(((uint32_t*)(whitelist))[i]);
+	});
+
 	Urlarbitrator* arbi = ((Urlarbitrator*)(UrlarbitratorPtr));
-	arbi->Detect();
+
+	tbb::concurrent_vector<Access*> buffer;
+	arbi->Detect(buffer, dict);
 	
-	tbb::concurrent_vector<Access*> groupedConflicts;
-	tbb::parallel_for(std::size_t(0), std::size_t(arbi->indexer.size()), [&](std::size_t i) {
-		if (arbi->indexer[i]->group != UINT32_MAX) {
-			groupedConflicts.push_back(arbi->indexer[i]);
-		}
-	});
+	tbb::parallel_sort(buffer.begin(), buffer.end(), [](Access* lhs, Access* rhs) { return lhs->tx < rhs->tx; });
+	auto last = std::unique(buffer.begin(), buffer.end(), [](Access* lhs, Access* rhs) { return lhs->tx == rhs->tx; });
+	buffer.resize(std::distance(buffer.begin(), last));
 
-	tbb::parallel_sort(groupedConflicts.begin(), groupedConflicts.end(), [](Access* lft, Access* rgt) { return lft->tx < rgt->tx; });
-	
-	tbb::parallel_for(std::size_t(0), std::size_t(groupedConflicts.size()), [&](std::size_t i) {
-	//for (std::size_t i = 0; i < txIDs.size(); i++) {
-		((uint32_t*)(txs))[i] = groupedConflicts[i]->tx;
-		((uint32_t*)(group))[i] = groupedConflicts[i]->group;
-
-		if (groupedConflicts[i]->isValid)
-			((uint8_t*)(conflictFlags))[i] = 0;
-		else
-			((uint8_t*)(conflictFlags))[i] = 255;
-	});
-
-	*((uint32_t*)count) = arbi->indexer.size();
-	//std::strncpy(msgBuffer, arbi->msg.c_str(), std::min<uint32_t>(arbi->msg.size(), 4096));
-}
-
-/* ------------------------------*Exports transactions causing conflicts ------------------------------*/
-uint64_t GetConflictTxTotal(void* UrlarbitratorPtr) {
-	Urlarbitrator* arbi = ((Urlarbitrator*)(UrlarbitratorPtr));
-	return arbi->conflictPairs.size();
-}
-
-void ExportTxs(void* UrlarbitratorPtr, char* lftBuffer, char* rgtBuffer, char* count) {
-	Urlarbitrator* arbi = ((Urlarbitrator*)(UrlarbitratorPtr));
-
-	std::vector<uint32_t> lftTxs;
-	std::vector<uint32_t> rgtTxs;
-	arbi->ExportTxs(lftTxs, rgtTxs);
-
-	*((uint32_t*)count) = lftTxs.size();
-	for (std::size_t i = 0; i < lftTxs.size(); i++) {
-		((uint32_t*)lftBuffer)[i] = lftTxs[i];
-		((uint32_t*)rgtBuffer)[i] = rgtTxs[i];
+	for (std::size_t i = 0; i < buffer.size(); i++) {
+		((uint32_t*)(outTxBuf))[i] = buffer[i]->tx;
 	}
+	*((uint32_t*)outCount) = buffer.size();
 }
 
-/* -----------------------------------------------------------------------------------------------------*/
+void UrlarbitratorExportConflictPairs(void* UrlarbitratorPtr, char* lhsBuf, char* rhsBuf, char* count) {
+	Urlarbitrator* arbi = ((Urlarbitrator*)(UrlarbitratorPtr));	
 
-uint64_t GetConflictPathsTotal(void* UrlarbitratorPtr) {
-	return 0;
+	std::vector<std::pair<Access*, Access*>> pairs;
+	pairs.reserve(Urlarbitrator::MAX_ENTRIES); // Max entries
+	for (std::size_t i = 0; i < arbi->conflicts.size(); i++) {
+		arbi->conflicts[i]->ExportCombinations(pairs, Urlarbitrator::MAX_ENTRIES);
+	}
+
+	for (std::size_t i = 0; i < pairs.size(); i++) {
+		((uint32_t*)lhsBuf)[i] = pairs[i].first->tx;
+		((uint32_t*)rhsBuf)[i] = pairs[i].second->tx;
+	}
+	*((uint32_t*)count) = pairs.size();
 }
 
-void ExportPaths(void* UrlarbitratorPtr, char* paths, char* pathLengths, char* txIDs, char* idLength, char* counts) {
+void UrlarbitratorExportConflictPaths(void* UrlarbitratorPtr, char* paths, char* pathLengths, char* txIDs, char* idLength, char* counts) {
 	Urlarbitrator* arbi = ((Urlarbitrator*)(UrlarbitratorPtr));
 
 	std::vector<std::string*> conflictPaths;
 	std::vector<uint32_t> txs;
 	std::vector<uint32_t> idLengths;
 	arbi->ExportPaths(conflictPaths, txs, idLengths);
-		
+
 	uint32_t offset = 0;
 	for (std::size_t i = 0; i < conflictPaths.size(); i++) {
 		std::memcpy(paths + offset, conflictPaths[i]->c_str(), conflictPaths[i]->size());
@@ -97,24 +77,18 @@ void ExportPaths(void* UrlarbitratorPtr, char* paths, char* pathLengths, char* t
 	*((uint32_t*)counts) = idLengths.size() - 1;
 }
 
-/* -----------------------------------------------------------------------------------------------------*/
-
-bool IsSparse(void* UrlarbitratorPtr) {
-	return true;
-}
-
-void Clear(void* UrlarbitratorPtr) {
+void UrlarbitratorClear(void* UrlarbitratorPtr) {
 	((Urlarbitrator*)(UrlarbitratorPtr))->Clear();
 }
 
-void Stop(void* UrlarbitratorPtr) {
+void UrlarbitratorStop(void* UrlarbitratorPtr) {
 	delete (Urlarbitrator*)(UrlarbitratorPtr);
 }
 
-void GetVersion(char* ver) {
+void UrlarbitratorGetVersion(char* ver) {
 	std::strcpy(ver, version);
 }
 
-void GetProduct(char* productInfo) {
+void UrlarbitratorGetProduct(char* productInfo) {
 	std::strcpy(productInfo, product);
 }

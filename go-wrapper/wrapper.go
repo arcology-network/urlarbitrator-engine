@@ -2,27 +2,30 @@ package wrapper
 
 /*
 #cgo CFLAGS: -I../arbitrator
-#cgo LDFLAGS: -L./ -lurlarbitrator
+#cgo LDFLAGS: -L/usr/local/lib -lurlarbitrator
 #include "external.h"
 #include <stdlib.h>
 */
 import "C"
 
 import (
-	"fmt"
 	"time"
 	"unsafe"
 
-	"github.com/arcology/common-lib/codec"
+	"github.com/arcology-network/common-lib/codec"
+)
+
+const (
+	MAX_ENTRIES = 65536
 )
 
 func Start() unsafe.Pointer {
-	return C.Start()
+	return C.UrlarbitratorStart()
 }
 
 func Clear(p unsafe.Pointer, buffer unsafe.Pointer) {
 	C.free(buffer)
-	C.Clear(p)
+	C.UrlarbitratorClear(p)
 }
 
 func Insert(
@@ -31,70 +34,73 @@ func Insert(
 	paths []string,
 	reads []uint32,
 	writes []uint32,
-	addOrDelete []bool,
 	composite []bool,
-) (unsafe.Pointer, time.Duration) {
-	length := uint(len(paths))
+) (time.Duration, unsafe.Pointer) {
+	begintime := time.Now()
+	length := uint32(len(paths))
 	pathLen := make([]uint32, length)
-	t0 := time.Now()
-	for i, p := range paths {
-		pathLen[i] = uint32(len(p))
-	}
 
+	for i, path := range paths {
+		pathLen[i] = uint32(len(path))
+	}
 	buf := codec.Strings(paths).Flatten()
 	cstr := C.CString(string(buf))
-	elapsed := time.Now().Sub(t0)
 
-	C.Insert(
+	// var buf bytes.Buffer
+	// for i, p := range paths {
+	// 	fmt.Fprintf(&buf, "%s", p)
+	// }
+	// cstr := C.CString(buf.String())
+
+	elapsed := time.Since(begintime)
+
+	C.UrlarbitratorInsert(
 		p,
 		(*C.char)(unsafe.Pointer(&txs[0])),
 		(*C.char)(unsafe.Pointer(nil)),
 		(*C.char)(unsafe.Pointer(cstr)),
 		(*C.char)(unsafe.Pointer(&reads[0])),
 		(*C.char)(unsafe.Pointer(&writes[0])),
-		(*C.char)(unsafe.Pointer(&addOrDelete[0])),
 		(*C.char)(unsafe.Pointer(&composite[0])),
 		(*C.char)(unsafe.Pointer(&pathLen[0])),
-		*(*C.uint)(unsafe.Pointer(&length)),
+		C.uint32_t(length),
 	)
-	return unsafe.Pointer(cstr), elapsed
+	return elapsed, unsafe.Pointer(cstr)
 }
 
-func Detect(p unsafe.Pointer, length uint32) ([]uint32, []uint32, []bool) {
+func Detect(p unsafe.Pointer, whitelist []uint32) ([]uint32, []uint32, []bool) {
+	length := len(whitelist)
 	txs := make([]uint32, length)
 	groups := make([]uint32, length)
 	flags := make([]bool, length)
 	count := uint32(0)
 	msg := make([]uint8, 4096) // 4K message buffer.
 
-	C.Detect(
+	C.UrlarbitratorDetect(
 		p,
+		(*C.char)(unsafe.Pointer(&whitelist[0])),
+		(C.uint32_t)(length),
 		(*C.char)(unsafe.Pointer(&txs[0])),
-		(*C.char)(unsafe.Pointer(&groups[0])),
-		(*C.char)(unsafe.Pointer(&flags[0])),
 		(*C.char)(unsafe.Pointer(&count)),
 		(*C.char)(unsafe.Pointer(&msg[0])),
 	)
+
+	for i := 0; i < int(count); i++ {
+		flags[i] = true
+	}
 	return txs[:count], groups[:count], flags[:count]
 }
 
 func ExportTxs(p unsafe.Pointer) ([]uint32, []uint32) {
-	length := C.GetConflictTxTotal(p)
-	if length == 0 {
-		return []uint32{}, []uint32{}
-	}
-	left := make([]uint32, length)
-	right := make([]uint32, length)
+	left := make([]uint32, MAX_ENTRIES)
+	right := make([]uint32, MAX_ENTRIES)
 	count := uint32(0)
 
-	C.ExportTxs(
+	C.UrlarbitratorExportConflictPairs(
 		p,
 		(*C.char)(unsafe.Pointer(&left[0])),
 		(*C.char)(unsafe.Pointer(&right[0])),
 		(*C.char)(unsafe.Pointer(&count)),
 	)
-	if uint32(length) != count {
-		panic(fmt.Sprintf("wrong length, got %d, want %d", count, length))
-	}
-	return left, right
+	return left[:count], right[:count]
 }

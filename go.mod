@@ -1,5 +1,5 @@
-module github.com/arcology/urlarbitrator-engine
+module github.com/arcology-network/urlarbitrator-engine
 
 go 1.13
 
-require github.com/arcology/common-lib v0.9.2-0.20210813071015-d82c13b835bc
+require github.com/arcology-network/common-lib v0.9.2-0.20210825054709-eadab62563f0

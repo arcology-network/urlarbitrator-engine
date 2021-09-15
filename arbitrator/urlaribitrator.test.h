@@ -1,7 +1,15 @@
 #pragma once
+void hex_string(char str[], int length);
+
 bool TestDetection();
-bool TestDetection10m();
+bool TestDetection1m();
 bool TestFixedLengthArrayConflict();
 bool TestSortedMapConflict();
 bool TestQueueConflict();
 bool TestSortedMapConflict2();
+
+bool TestCase3();
+bool TestCaseAsynchronousConflictFree();
+bool TestCaseAsynchronousWithConflict();
+bool TestCompositeAndReads();
+bool TestDetection1mAsynchronous();

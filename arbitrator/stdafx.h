@@ -26,8 +26,10 @@
 #include <boost/pool/simple_segregated_storage.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/iterator/counting_iterator.hpp>
-
 #include <boost/multiprecision/cpp_int.hpp>
+
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp> // generators
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -59,6 +61,7 @@ namespace tbb = Concurrency;
 
 #include "version.h"
 #include "access.h"
+#include "access.info.h"
 #include "external.h"
 #include "urlaribitrator.h"
 #include "urlaribitrator.test.h"

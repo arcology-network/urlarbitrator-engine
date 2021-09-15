@@ -30,7 +30,7 @@ jobs:
   #     - run: sudo apt-get install libtbb-dev
   #     - attach_workspace:
   #         at: arbitrator
-      - run: go env -w GOPRIVATE=github.com/arcology
+      - run: go env -w GOPRIVATE=github.com/arcology-network
       - run: ls
       - run: ls -l arbitrator
       - run: sudo ln -s /home/circleci/project/arbitrator/liburlarbitrator.so /usr/local/lib
