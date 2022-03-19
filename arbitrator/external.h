@@ -13,8 +13,8 @@ extern "C" {
 	void UrlarbitratorClear(void* arbitratorPtr);
 	void UrlarbitratorStop(void* aribitratorPtr);
 
-	void UrlarbitratorInsert(void* arbitratorPtr, char* txs, char* branchIDs, char* paths, char* reads, char* writes, char* composite, char* pathLen, uint32_t count);
-	void UrlarbitratorDetect(void* arbitratorPtr, char* whitelist, uint32_t listLen, char* txBuf, char* count, char* msg);
+	void UrlarbitratorInsert(void* arbitratorPtr, char* txs, char* paths, char* pathLen, char* reads, char* writes, char* composite, uint32_t count);
+	void UrlarbitratorDetect(void* arbitratorPtr, char* groupIDs, char* groupIDLens, uint32_t groupIDCount, char* txBuf, char* count, char* msg);
 
 	void UrlarbitratorExportConflictPairs(void* arbitratorPtr, char* lftBuffer, char* rgtBuffer, char* count);  // Export the conflict txs pairs
 	void UrlarbitratorExportConflictPaths(void* arbitratorPtr, char* paths, char* pathLengths, char* txIDs, char* txCounts, char* count);  // Export the conflict paths and txs

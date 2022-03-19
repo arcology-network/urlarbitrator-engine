@@ -6,82 +6,68 @@ void AccessInfo::Add(Access* record) {
 	totalCompositeWrites += record->compositeWrites;
 	totalWrites += record->writes;
 
-	if (!this->records.empty() && (*records.begin())->branch != record->branch) {
-		if (Predetermine(record)) {
-			conflicts.push_back(record);
-		}		
+	if (!ordered.empty() || Predetermine(record)) {
+		ordered.insert(record);
+		ordered.insert(nonconflicts.begin(), nonconflicts.end());
+		nonconflicts.clear();
+		return;
 	}
-	records.insert(record);
+	nonconflicts.push_back(record);
 }
 
 bool AccessInfo::Predetermine(Access* record) {
-	if (!conflicts.empty()) // Conflict found already
+	if (record->IsReadOnly() && totalWrites == 0 && totalCompositeWrites == 0)  // Read only
 		return false;
 
-	if (record->writes == 0 && totalWrites == 0 && totalCompositeWrites == 0)  // Read only
+	if (record->IsCompositeOnly() && totalRead == 0 && totalWrites == 0) // Composite write only
 		return false;
 
-	if (record->reads == 0 && record->compositeWrites > 0 && totalRead == 0 && totalWrites == 0 && totalCompositeWrites > 0) // Composite write only
+	if (!ordered.empty() && (*ordered.begin())->tx == record->tx) {
 		return false;
-	
+	}
 	return true;
 }
 
-void AccessInfo::Detect(tbb::concurrent_unordered_set<uint32_t>& whitelist) {
-	if (records.size() <= 1)
+void AccessInfo::Detect() {
+	if (ordered.size() <= 1)
 		return;
 
-	conflicts.resize(0);
-	nonconflicts.resize(0);
-	auto begin = records.begin();
-	if (!whitelist.empty()) {
-		for (; begin != records.end(); begin++) {
-			if (whitelist.find((*begin)->tx) != whitelist.end()) {
-				break; // Get the first entry on the whitelist
-			}
-		}
-		if (begin == records.end())
-			return;
-	} 
-
-	nonconflicts.push_back(*begin);
-	auto iter = begin;
-	iter++;
-	if ((*begin)->writes > 0 || (*begin)->compositeWrites > 0) {
-		for (; iter != records.end(); iter++) {
-			if ((*iter)->branch == (*begin)->branch) {// In the same branch
-				nonconflicts.push_back(*iter);			
-				continue;
-			}
-
-			if (!whitelist.empty() && (whitelist.find((*iter)->tx) == whitelist.end())) {// The whitelist exists and the entry isn't on it
-				nonconflicts.push_back(*iter);
-				continue;
-			}
-
-			if ((*begin)->IsCompositeOnly() && (*iter)->IsCompositeOnly()) {// Composite writes
-				nonconflicts.push_back(*iter);
-				continue;
-			}
-
-			if ((*iter)->branch != (*begin)->branch)
-				conflicts.push_back(*iter);
-			else
-				nonconflicts.push_back(*iter);
+	conflicts.clear();
+	auto begin = ordered.begin();
+	for (; begin != ordered.end(); begin++) {
+		if ((*begin)->group != UINT32_MAX) {
+			nonconflicts.push_back(*begin);
+			break; // Get the first entry to start
 		}
 	}
-	else {
-		for (; iter != records.end(); iter++) {
-			if (!whitelist.empty() && (whitelist.find((*iter)->tx) == whitelist.end())) {
-				nonconflicts.push_back(*iter);
-				continue;
-			}
 
-			if (((*iter)->writes > 0 || (*iter)->compositeWrites > 0) && (*iter)->tx != (*records.begin())->tx)
-				conflicts.push_back(*iter); 
-			else 
-				nonconflicts.push_back(*iter);
+	if (begin == ordered.end()) {
+		return;
+	}
+	
+	auto iter = begin;
+	iter++;
+
+	for (; iter != ordered.end(); iter++) {
+		if ((*iter)->group == UINT32_MAX) {
+			continue;
 		}
+
+		if ((*iter)->group == (*begin)->group) {// In the same group
+			nonconflicts.push_back(*iter);			
+			continue;
+		}
+
+		if ((*begin)->IsReadOnly() && (*iter)->IsReadOnly()) { // read only
+			nonconflicts.push_back(*iter);
+			continue;
+		}
+			
+		if ((*begin)->IsCompositeOnly() && (*iter)->IsCompositeOnly()) {// Composite writes only
+			nonconflicts.push_back(*iter);
+			continue;
+		}
+		conflicts.push_back(*iter);		
 	}
 }
 
@@ -102,8 +88,7 @@ void AccessInfo::ExportCombinations(std::vector<std::pair<Access*, Access*>>& bu
 
 	for (std::size_t i = 0; i < conflicts.size(); i++) {
 		for (std::size_t j = i + 1; j < conflicts.size(); j++) {
-			if ((conflicts[i]->branch == conflicts[j]->branch) ||
-				(conflicts[i]->IsCompositeOnly() && conflicts[j]->IsCompositeOnly()) ||
+			if ((conflicts[i]->IsCompositeOnly() && conflicts[j]->IsCompositeOnly()) ||
 				(conflicts[i]->IsReadOnly() && conflicts[j]->IsReadOnly()))
 				continue;
 

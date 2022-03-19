@@ -12,4 +12,6 @@ bool TestCase3();
 bool TestCaseAsynchronousConflictFree();
 bool TestCaseAsynchronousWithConflict();
 bool TestCompositeAndReads();
+bool TestCompositeAndWrites();
+
 bool TestDetection1mAsynchronous();

@@ -6,13 +6,12 @@ struct AccessStub {
 	uint32_t writes = 0;
 	bool composite= false; // if a composite parent path access
 
-	uint32_t branch = UINT32_MAX;
-	uint32_t tx = UINT32_MAX;
 	uint32_t group = UINT32_MAX;
+	uint32_t tx = UINT32_MAX;
 	
 	AccessStub() {}
-	AccessStub(uint32_t tx, uint32_t branch, std::string path, uint32_t reads, uint32_t writes, bool composite) // For unit tests only
-		: tx(tx), branch(branch), path(path), reads(reads), writes(writes), composite(composite) {}
+	AccessStub(uint32_t tx, uint32_t group, std::string path, uint32_t reads, uint32_t writes, bool composite) // For unit tests only
+		: tx(tx), group(group), path(path), reads(reads), writes(writes), composite(composite) {}
 
 	bool operator == (AccessStub& rhs) {
 		return path.size() == rhs.path.size() && std::memcmp(path.data(), rhs.path.data(), path.size()) == 0;
@@ -43,47 +42,47 @@ struct AccessStub {
 	}
 };
 
-bool ConvertRecords(std::vector<AccessStub> records, std::vector<uint32_t> whitelist, std::vector<uint32_t> targetRemoval) {
+bool ConvertRecords(std::vector<AccessStub> ordered, std::vector<uint32_t> groupIDs, std::vector<uint32_t> groupIDslength, std::vector<uint32_t> targetRemoval) {
 	char msgBuffer[4096];
-	std::vector<uint32_t> ids(records.size(), 0);
-	std::vector<uint32_t> txs(records.size(), 0);
-	std::vector<std::string> paths(records.size());
-	std::vector<uint32_t> reads(records.size(), 0);
-	std::vector<uint32_t> writes(records.size(), 0);
-	bool* addOrDeletes = new bool[records.size()];
-	bool* composite = new bool[records.size()];
-	std::vector<uint32_t> pathLen(records.size(), 0);
+	std::vector<uint32_t> ids(ordered.size(), 0);
+	std::vector<uint32_t> txs(ordered.size(), 0);
+	std::vector<std::string> paths(ordered.size());
+	std::vector<uint32_t> reads(ordered.size(), 0);
+	std::vector<uint32_t> writes(ordered.size(), 0);
+	bool* addOrDeletes = new bool[ordered.size()];
+	bool* composite = new bool[ordered.size()];
+	std::vector<uint32_t> pathLen(ordered.size(), 0);
 
-	for (std::size_t i = 0; i < records.size(); i++) {
-		txs[i] = records[i].tx;
-		paths[i] = records[i].path;
-		reads[i] = records[i].reads;
-		writes[i] = records[i].writes;
-	//	addOrDeletes[i] = records[i].addOrDelete;
-		composite[i] = records[i].composite;
+	for (std::size_t i = 0; i < ordered.size(); i++) {
+		txs[i] = ordered[i].tx;
+		paths[i] = ordered[i].path;
+		reads[i] = ordered[i].reads;
+		writes[i] = ordered[i].writes;
+	//	addOrDeletes[i] = ordered[i].addOrDelete;
+		composite[i] = ordered[i].composite;
 	}
 
 	std::string concatenated;
-	for (std::size_t i = 0; i < records.size(); i++) {
-		concatenated += records[i].path;
-		pathLen[i] = (records[i].path.size());
+	for (std::size_t i = 0; i < ordered.size(); i++) {
+		concatenated += ordered[i].path;
+		pathLen[i] = (ordered[i].path.size());
 	}
 
 	auto t0 = std::chrono::steady_clock::now();
 	void* arbi = UrlarbitratorStart();
-	std::cout << "Start(): " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() << " ms" << std::endl;
+	//std::cout << "Start(): " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() << " ms" << std::endl;
 
-	std::vector<uint32_t> conflictGroup(records.size(), UINT32_MAX);
-	std::vector<uint8_t> flags(records.size(), 0);
+	std::vector<uint32_t> conflictGroup(ordered.size(), UINT32_MAX);
+	std::vector<uint8_t> flags(ordered.size(), 0);
 	uint32_t counter = 0;
 
 	t0 = std::chrono::steady_clock::now();
-	UrlarbitratorInsert(arbi, (char*)txs.data(), (char*)txs.data(), (char*)concatenated.data(),  (char*)reads.data(), (char*)writes.data(), (char*)composite, (char*)pathLen.data(), records.size());
+	UrlarbitratorInsert(arbi, (char*)txs.data(), (char*)concatenated.data(), (char*)pathLen.data(), (char*)reads.data(), (char*)writes.data(), (char*)composite, ordered.size());
 	std::cout << "Insert(): " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() << " ms" << std::endl;
 
-	t0 = std::chrono::steady_clock::now();
-	UrlarbitratorDetect(arbi, (char*)whitelist.data(), whitelist.size(), (char*)txs.data(), (char*)&counter, msgBuffer);
-	std::cout << "AsynDetect(): " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() << " ms" << std::endl;
+	//t0 = std::chrono::steady_clock::now();
+	UrlarbitratorDetect(arbi, (char*)groupIDs.data(), (char*)groupIDslength.data(), groupIDs.size(), (char*)txs.data(), (char*)&counter, msgBuffer);
+	//std::cout << "AsynDetect(): " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() << " ms" << std::endl;
 
 	std::vector<uint32_t> left(Urlarbitrator::MAX_ENTRIES, 0);
 	std::vector<uint32_t> right(Urlarbitrator::MAX_ENTRIES, 0);
@@ -102,6 +101,8 @@ bool ConvertRecords(std::vector<AccessStub> records, std::vector<uint32_t> white
 			std::cout << "tx = " << txs[i] << ", group = " << conflictGroup[i] << ", flag = " << int(flags[i]) << std::endl;
 		}
 	}
+
+	UrlarbitratorClear(arbi);
 	return txs == targetRemoval;
 }
 
@@ -119,8 +120,8 @@ bool TestDetection() {
 
 	AccessStub trans6(4, 4, "ctrn-0/ctrn-00", 1, 0, false);
 
-	std::vector<AccessStub> records{ trans0, trans1 , trans2, trans3 ,trans4, trans5, trans6, trans7 };
-	return ConvertRecords(records, { 0, 1, 2, 3, 4}, {1, 4});
+	std::vector<AccessStub> ordered{ trans0, trans1 , trans2, trans3 ,trans4, trans5, trans6, trans7 };
+	return ConvertRecords(ordered, { 0, 1, 2, 3, 4}, { 1, 1, 1, 1, 1 }, {1, 4});
 }
 
 bool TestFixedLengthArrayConflict() {
@@ -136,8 +137,8 @@ bool TestFixedLengthArrayConflict() {
 	AccessStub trans8(3, UINT32_MAX, "blcc://eth1.0/contractAddress/storage/containers/arrayID/1", 0, 1, true);
 	AccessStub trans9(3, UINT32_MAX, "blcc://eth1.0/contractAddress/storage/containers/arrayID/@", 1, 0, false);
 
-	std::vector<AccessStub> records{ trans0, trans2, trans3 ,trans4, trans5, trans7, trans8, trans9 };
-	return ConvertRecords(records, { 2, 3 }, {});
+	std::vector<AccessStub> ordered{ trans0, trans2, trans3 ,trans4, trans5, trans7, trans8, trans9 };
+	return ConvertRecords(ordered, { 2, 3 }, { 1, 1 }, {});
 }
 
 bool TestSortedMapConflict2() {
@@ -152,8 +153,8 @@ bool TestSortedMapConflict2() {
 	AccessStub trans7(3, UINT32_MAX, "blcc://eth1.0/accounts/contractAddress/storage/containers/map1/!", 1, 0,  false);
 	AccessStub trans8(3, UINT32_MAX, "blcc://eth1.0/accounts/contractAddress/storage/containers/map1/$736f6d656b6579", 0, 1, false);
 
-	std::vector<AccessStub> records{ trans0, trans1, trans2, trans3 ,trans4, trans5, trans6, trans7, trans8 };
-	return ConvertRecords(records, { 2, 3 }, {3});
+	std::vector<AccessStub> ordered{ trans0, trans1, trans2, trans3 ,trans4, trans5, trans6, trans7, trans8 };
+	return ConvertRecords(ordered, { 2, 3 }, { 1, 1 }, {3});
 }
 
 bool TestSortedMapConflict() {
@@ -172,15 +173,15 @@ bool TestSortedMapConflict() {
 	AccessStub trans10(3, UINT32_MAX, "blcc://eth1.0/contractAddress/storage/containers/mapID/$key3", 0, 1, true);
 	AccessStub trans11(3, UINT32_MAX,  "blcc://eth1.0/contractAddress/storage/containers/mapID/@", 1, 0, false);
 
-	std::vector<AccessStub> records{ trans0, trans1 , trans2, trans3 ,trans4, trans5, trans6, trans7, trans8, trans9, trans10, trans11 };
-	ConvertRecords(records, { 1, 2, 3 }, { 2, 3 });
+	std::vector<AccessStub> ordered{ trans0, trans1 , trans2, trans3 ,trans4, trans5, trans6, trans7, trans8, trans9, trans10, trans11 };
+	ConvertRecords(ordered, { 1, 2, 3 }, { 1, 1, 1}, { 2, 3 });
 
-	tbb::parallel_sort(records.begin(), records.end(), [](auto& lft, auto& rgt) {
+	tbb::parallel_sort(ordered.begin(), ordered.end(), [](auto& lft, auto& rgt) {
 		return lft < rgt;
 	});
 
-	for (int i = 0; i < records.size(); i++) {
-		std::cout << records[i].path << std::endl;
+	for (int i = 0; i < ordered.size(); i++) {
+		std::cout << ordered[i].path << std::endl;
 	}
 
 	return true;
@@ -198,7 +199,7 @@ void hex_string(char str[], int length) {
 }
 
 bool TestDetection1m() {
-	int N = 200000;
+	int N = 250000;
 	std::vector<std::string> addresses(N * 2);
 	for (int i = 0; i < N; i++) {
 		char str[21];
@@ -210,21 +211,27 @@ bool TestDetection1m() {
 		addresses[i * 2 + 1] = std::string(str);
 	}
 
-	std::vector<AccessStub> records(N * 5);
-	for (std::size_t i = 0; i < N; ++i) {
-		records[i * 5] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i * 2] + "/balance", 0, 1, true);
-		records[i * 5 + 1] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i * 2 + 1] + "/balance", 0, 1, true);
-		records[i * 5 + 2] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[0] + "/balance", 0, 1, true);
-		records[i * 5 + 3] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i * 2] + "/nonce", 0, 1, true);
-		records[i * 5 + 4] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i * 2 + 1] + "/", 1, 0,  false);
+	std::vector<uint32_t> txIds(N);
+	std::vector<AccessStub> ordered(N * 5);
+ 	for (std::size_t i = 0; i < N; ++i) {
+		ordered[i * 5] = AccessStub(i + 1, UINT32_MAX,	   "blcc://eth1.0/account/" + addresses[i * 2] + "/balance", 0, 1, true);
+		ordered[i * 5 + 1] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/account/" + addresses[i * 2 + 1] + "/balance", 0, 1, true);
+		ordered[i * 5 + 2] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/account/" + addresses[0] + "/balance", 0, 1, true);
+		ordered[i * 5 + 3] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/account/" + addresses[i * 2] + "/nonce", 0, 1, true);
+		ordered[i * 5 + 4] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/account/" + addresses[i * 2 + 1] + "/", 1, 0,  false);
+		txIds[i] = i;
 	}
 		
 	uint32_t i = 2;
 	std::vector<uint32_t> targetRemoval(N - 1);
 	std::for_each(targetRemoval.begin(), targetRemoval.end(), [&](uint32_t& iter) { iter = i++; });
 	
-	ConvertRecords(records, {}, targetRemoval);
-	return true;
+	//std::size_t stride = 30000;
+	//for (std::size_t i = 0; i < ordered.size() / stride - 1; i++) {
+	//	std::vector<AccessStub> toInsert(ordered.begin() + i * stride, ordered.begin() + (i + 1) * stride);
+		ConvertRecords(ordered, txIds, std::vector<uint32_t>(txIds.size(), 1), {});
+	//}
+	//return true;
 }
 
 bool TestDetection1mAsynchronous() {
@@ -241,42 +248,19 @@ bool TestDetection1mAsynchronous() {
 	}
 
 	std::vector<uint32_t> txIds(N);
-	std::vector<AccessStub> records(N * 5);
+	std::vector<AccessStub> ordered(N * 5);
 	for (std::size_t i = 0; i < N; ++i) {
-		records[i * 5] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i * 2] + "/balance", 0, 1, true);
-		records[i * 5 + 1] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i * 2 + 1] + "/balance", 0, 1, true);
-		records[i * 5 + 2] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[0] + "/balance", 0, 1, true);
-		records[i * 5 + 3] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i * 2] + "/nonce", 0, 1, true);
-		records[i * 5 + 4] = AccessStub(i + 1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i * 2 + 1] + "/", 1, 0,  false);
+
+		ordered[i * 5] = AccessStub(i + 1, UINT32_MAX,      addresses[i * 2], 0, 1, true);
+		ordered[i * 5 + 1] = AccessStub(i + 1, UINT32_MAX,  addresses[i * 2 + 1], 0, 1, true);
+		ordered[i * 5 + 2] = AccessStub(i + 1, UINT32_MAX,  addresses[0], 0, 1, true);
+		ordered[i * 5 + 3] = AccessStub(i + 1, UINT32_MAX,  addresses[i * 2], 0, 1, true);
+		ordered[i * 5 + 4] = AccessStub(i + 1, UINT32_MAX,  addresses[i * 2 + 1], 1, 0,  false);
 		txIds[i] = i;
 	}
 
-	ConvertRecords(records, txIds, {});
+	ConvertRecords(ordered, txIds, std::vector<uint32_t>(txIds.size(), 1), {});
 	return true;
-}
-
-bool TestPerf() {
-	int N = 50000;
-	std::vector<std::string> addresses(N*2);
-	for (int i = 0; i < N; i++) {
-		char str[21];
-		hex_string(str, 20);
-		str[20] = 0;
-		addresses[i*2] = std::string(str);
-		hex_string(str, 20);
-		str[20] = 0;
-		addresses[i*2 + 1] = std::string(str);
-	}
-	
-	std::vector<AccessStub> records(N*5);
-	for (std::size_t i = 0; i < N; ++i) {
-		records[i*5] = AccessStub(i+1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i*2] + "/balance", 0, 1, true);
-		records[i*5+1] = AccessStub(i+1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i*2+1] + "/balance", 0, 1, true);
-		records[i*5+2] = AccessStub(i+1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[0] + "/balance", 0, 1, true);
-		records[i*5+3] = AccessStub(i+1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i*2] + "/nonce", 0, 1, true);
-		records[i*5+4] = AccessStub(i+1, UINT32_MAX, "blcc://eth1.0/accounts/" + addresses[i*2+1] + "/", 1, 0,  false);
-	}
-	ConvertRecords(records, {}, {});
 }
 
 bool TestQueueConflict() {
@@ -292,8 +276,8 @@ bool TestQueueConflict() {
 	AccessStub trans8(2, UINT32_MAX, "blcc://eth1.0/contractAddress/storage/containers/queueID/$00000000000000640000000300000000", 0, 1, false);
 	AccessStub trans9(2, UINT32_MAX, "blcc://eth1.0/contractAddress/storage/containers/queueID/@", 1, 0,  false);
 
-	std::vector<AccessStub> records{ trans0, trans1, trans2, trans3, trans4, trans5, trans6, trans7, trans8, trans9 };
-	return ConvertRecords(records, {}, {2});
+	std::vector<AccessStub> ordered{ trans0, trans1, trans2, trans3, trans4, trans5, trans6, trans7, trans8, trans9 };
+	return ConvertRecords(ordered, { 1, 2 }, {1, 1}, {2});
 }
 
 bool TestCase3() {
@@ -316,8 +300,8 @@ bool TestCase3() {
 	AccessStub trans13(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/containers/map3/key1", 0, 1,  false);	
 	AccessStub trans14(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/containers/map3/key2", 0, 1,  false);
 	AccessStub trans15(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/balance", 0, 1, true);	
-	std::vector<AccessStub> records{trans0, trans1, trans2, trans3, trans4, trans5, trans6, trans7, trans8, trans9, trans10, trans11, trans12, trans13, trans14, trans15};
-	return ConvertRecords(records, {}, {2});
+	std::vector<AccessStub> ordered{trans0, trans1, trans2, trans3, trans4, trans5, trans6, trans7, trans8, trans9, trans10, trans11, trans12, trans13, trans14, trans15};
+	return ConvertRecords(ordered, {1, 2, 3, 4}, { 1, 1, 1, 1 }, {2});
 }
 
 bool TestCaseAsynchronousConflictFree() {
@@ -340,8 +324,8 @@ bool TestCaseAsynchronousConflictFree() {
 	AccessStub trans13(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/containers/map3/key1", 0, 1,  false);
 	AccessStub trans14(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/containers/map3/key2", 0, 1,  false);
 	AccessStub trans15(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/balance", 0, 1, true);
-	std::vector<AccessStub> records{ trans0, trans1, trans2, trans3, trans4, trans5, trans6, trans7, trans8, trans9, trans10, trans11, trans12, trans13, trans14, trans15 };
-	return ConvertRecords(records, {1, 3, 4}, {});
+	std::vector<AccessStub> ordered{ trans0, trans1, trans2, trans3, trans4, trans5, trans6, trans7, trans8, trans9, trans10, trans11, trans12, trans13, trans14, trans15 };
+	return ConvertRecords(ordered, {1, 3, 4}, { 1, 1, 1}, {});
 }
 
 bool TestCaseAsynchronousWithConflict() {
@@ -364,8 +348,8 @@ bool TestCaseAsynchronousWithConflict() {
 	AccessStub trans13(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/containers/map3/key1", 0, 1,  false);
 	AccessStub trans14(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/containers/map3/key2", 0, 1,  false);
 	AccessStub trans15(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/balance", 0, 1, true);
-	std::vector<AccessStub> records{ trans0, trans1, trans2, trans3, trans4, trans5, trans6, trans7, trans8, trans9, trans10, trans11, trans12, trans13, trans14, trans15 };
-	return ConvertRecords(records, { 1, 2, 3, 4}, { 2 });
+	std::vector<AccessStub> ordered{ trans0, trans1, trans2, trans3, trans4, trans5, trans6, trans7, trans8, trans9, trans10, trans11, trans12, trans13, trans14, trans15 };
+	return ConvertRecords(ordered, { 1, 2, 3, 4}, { 1, 1, 1, 1}, { 2 });
 }
 
 bool TestCompositeAndReads() {
@@ -373,5 +357,13 @@ bool TestCompositeAndReads() {
 	AccessStub trans1(2, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/map1/key1", 1, 0, false);
 	AccessStub trans2(3, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/map1/key1", 1, 0, false);
 	AccessStub trans3(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/map1/key1", 0, 1, true);
-	return ConvertRecords({ trans0, trans1, trans2, trans3 }, {1, 2, 3, 4}, {2, 3});
+	return ConvertRecords({ trans0, trans1, trans2, trans3 }, {1, 2, 3, 4}, { 1, 1, 1, 1 }, {2, 3});
+}
+
+bool TestCompositeAndWrites() {
+	AccessStub trans0(1, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/map1/key1", 0, 1, true);
+	AccessStub trans1(2, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/map1/key1", 0, 1, true);
+	AccessStub trans2(3, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/map1/key1", 0, 1, false);
+	AccessStub trans3(4, UINT32_MAX, "blcc://eth1.0/accounts/Alice/storage/map1/key1", 0, 1, false);
+	return ConvertRecords({ trans0, trans1, trans2, trans3 }, { 1, 2, 3, 4 }, { 1, 1, 1, 1 }, { 3, 4 });
 }

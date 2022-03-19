@@ -86,6 +86,10 @@ int main() {
 		std::cout << "Error: TestCompositeAndReads() failed !!!" << std::endl;
 	}
 
+	if (!TestCompositeAndWrites()) {
+		std::cout << "Error: TestCompositeAndWrites() failed !!!" << std::endl;
+	}
+
 	if (!TestDetection()) {
 		std::cout << "Error: TestDetection() failed !!!" << std::endl;
 	}
@@ -110,10 +114,10 @@ int main() {
 		std::cout << "Error: TestCase3 failed" << std::endl;
 	}
 
-	//if (!TestDetection1m()) {
-	//	std::cout << "Error: TestDetection1m failed" << std::endl;
-	//}
-
+	if (!TestDetection1m()) {
+		std::cout << "Error: TestDetection1m failed" << std::endl;
+	}
+	
 	//if (!TestDetection1mAsynchronous()) {
 	//	std::cout << "Error: TestDetection1mAsynchronous failed" << std::endl;
 	//}
