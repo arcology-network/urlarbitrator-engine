@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/arcology-network/urlarbitrator-engine/go-wrapper"
+	"github.com/HPISTechnologies/urlarbitrator-engine/go-wrapper"
 )
 
 func TestWrapperBasic(t *testing.T) {

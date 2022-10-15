@@ -12,7 +12,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/arcology-network/common-lib/codec"
+	"github.com/HPISTechnologies/common-lib/codec"
 )
 
 const (
