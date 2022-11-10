@@ -1,0 +1,8 @@
+github.com/arcology-network/3rd-party v0.0.0-20221110004651-3ae5c3009a22 h1:rWxSiYnmZ/2fGjuGxfvC74t/yFF+yLUa3w1GXCpXryo=
+github.com/arcology-network/3rd-party v0.0.0-20221110004651-3ae5c3009a22/go.mod h1:FWc3OKkOV9n5Vm4m3p2C3O5ajqSMGDCqj03o+ARN5ts=
+github.com/arcology-network/common-lib v0.0.0-20221110013709-f355641f88df h1:nO47w71lQXLoGJrowTBU1g5DD3YiC04oFltSTQDkf1g=
+github.com/arcology-network/common-lib v0.0.0-20221110013709-f355641f88df/go.mod h1:8rs8xQEkI3CVxBmOvunTfHRvLLqQw99HH3/wfc9PSsw=
+github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
+github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+golang.org/x/exp v0.0.0-20221109205753-fc8884afc316 h1:FedCSp0+vayF11p3wAQndIgu+JTcW2nLp5M+HSefjlM=
+golang.org/x/exp v0.0.0-20221109205753-fc8884afc316/go.mod h1:CxIveKay+FTh1D0yPZemJVgC/95VzuuOLq5Qi4xnoYc=

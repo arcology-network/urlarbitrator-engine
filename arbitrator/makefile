@@ -1,0 +1,22 @@
+.PHONY : clean test
+
+CPPFLAGS= -std=c++17 -fPIC -Wall -Wextra -O3
+#CPPFLAGS= -std=c++17 -fPIC -Wall -Wextra -ggdb -D_GLIBCXX_USE_CXX11_ABI=0
+LDFLAGS= -std=c++17 -shared -D_GLIBCXX_USE_CXX11_ABI=0
+
+SOURCES = access.info.cpp external.cpp urlarbitrator.cpp
+OBJECTS=$(SOURCES:.cpp=.o)
+
+TARGET=liburlarbitrator.so
+
+all: $(TARGET)
+
+clean:
+	rm -f $(OBJECTS) $(TARGET)
+
+test:
+	g++ $(CPPFLAGS) external.cpp urlarbitrator.cpp main.cpp urlaribitrator.test.cpp -ltbb -o test
+
+$(TARGET) : $(OBJECTS)
+	g++ $(CPPFLAGS) $(OBJECTS) -o $@ $(LDFLAGS) -ltbb
+
