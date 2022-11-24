@@ -2,7 +2,7 @@ module github.com/arcology-network/urlarbitrator-engine
 
 go 1.19
 
-replace github.com/arcology-network/common-lib => ../common-lib/
+// replace github.com/arcology-network/common-lib => ../common-lib/
 
 require github.com/arcology-network/common-lib v0.0.0-20221124074600-09b0a62272cb
 
